@@ -28,6 +28,9 @@ h1{font-size:17px;margin:0;flex:1}
 .pt button{position:absolute;top:2px;right:2px;width:26px;height:26px;border-radius:50%;border:0;background:#000a;color:#fff;font-size:16px;line-height:1;cursor:pointer}
 .phb{display:flex;gap:8px;margin-top:10px}
 .who:empty{display:none}
+.rfb{background:#ffffff26;border:0;color:#fff;width:34px;height:34px;border-radius:50%;font-size:20px;line-height:1;cursor:pointer;flex:none}
+.rfb.spin{animation:rot 1s linear infinite}@keyframes rot{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.rfb.spin{animation:none;opacity:.5}}
 .seg{display:flex;flex-wrap:wrap;gap:6px}.seg button{flex:1 0 auto;min-width:52px;background:var(--card2);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:10px 8px;font:600 14px system-ui,sans-serif}
 .seg button.on{background:var(--blue);border-color:var(--blue);color:#fff}
 .planbox{position:relative;overflow:auto;border:1px solid var(--line);border-radius:10px;background:#fff;margin-top:8px;max-height:70vh;-webkit-overflow-scrolling:touch}
@@ -100,6 +103,7 @@ label{display:block;font-size:12px;color:var(--muted);margin:10px 0 4px}
     <div style="flex:1;min-width:0">
       <h1>Vady a nedodělky – BD Jordánská III</h1>
     </div>
+    <button type="button" id="rfb" class="rfb" title="Obnovit data" aria-label="Obnovit data">⟳</button>
     <span class="who" id="who" title="Změnit jméno"></span>
   </div>
   <nav id="nav"></nav>
@@ -232,6 +236,8 @@ async function start(){
     $('#main').innerHTML = `<div class="empty">${esc(e.message)}</div>`; return;
   }
   if (S.role === 'admin' && !ls('vn_jmeno')) askName();
+  lastSync = Date.now();
+  $('#rfb').onclick = () => refreshData(true);
   renderHeader(); render();
   const h = decodeURIComponent(location.hash.slice(1));
   if (h && S.vady.some(v => v.id === h)) openDetail(h);
@@ -242,6 +248,31 @@ function askName(){
   if (n !== null && n.trim()) ls('vn_jmeno', n.trim());
   renderHeader();
 }
+
+/* automatické obnovení dat: po návratu do appky, každou minutu a tlačítkem ⟳ */
+let lastSync = 0, syncing = false;
+function canAutoRefresh(){
+  if (!S.role || syncing) return false;
+  if ($('#load').style.display === 'flex') return false;          // právě se ukládá
+  if ($('#ov').classList.contains('on')) return false;            // otevřený detail / formulář firmy
+  if (document.getElementById('pv')) return false;                // prohlížeč fotek
+  if (S.tab === 'new') return false;                              // rozepsaná vada
+  return true;
+}
+async function refreshData(manual){
+  if (!manual && !canAutoRefresh()) return;
+  if (syncing) return;
+  syncing = true; const b = $('#rfb'); if (b) b.classList.add('spin');
+  try {
+    const j = await api('init');
+    S.vady = j.vady; S.firmy = j.firmy; S.tym = j.tym || S.tym; lastSync = Date.now();
+    if (manual && S.tab === 'new') { toast('Data obnovena'); }
+    else if (!$('#ov').classList.contains('on') && S.tab !== 'new') { const y = window.scrollY; render(); window.scrollTo(0, y); if (manual) toast('Data obnovena'); }
+  } catch(e){ if (manual) toast(e.message); }
+  finally { syncing = false; if (b) b.classList.remove('spin'); }
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && Date.now() - lastSync > 15000) refreshData(false); });
+setInterval(() => { if (document.visibilityState === 'visible' && Date.now() - lastSync > 55000) refreshData(false); }, 60000);
 
 function renderHeader(){
   const who = $('#who');
