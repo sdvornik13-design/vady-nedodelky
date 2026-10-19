@@ -28,6 +28,7 @@ h1{font-size:17px;margin:0;flex:1}
 .pt button{position:absolute;top:2px;right:2px;width:26px;height:26px;border-radius:50%;border:0;background:#000a;color:#fff;font-size:16px;line-height:1;cursor:pointer}
 .phb{display:flex;gap:8px;margin-top:10px}
 .who:empty{display:none}
+.tel{color:var(--blue2);font-weight:700;text-decoration:none;white-space:nowrap}
 .updbar{display:block;width:100%;border:0;background:#30a46c;color:#fff;font:700 14px system-ui,sans-serif;padding:12px 16px;padding-top:calc(12px + env(safe-area-inset-top,0px));cursor:pointer;text-align:center}
 .rfb{background:#ffffff26;border:0;color:#fff;width:34px;height:34px;border-radius:50%;font-size:20px;line-height:1;cursor:pointer;flex:none}
 .rfb.spin{animation:rot 1s linear infinite}@keyframes rot{to{transform:rotate(360deg)}}
@@ -121,7 +122,7 @@ label{display:block;font-size:12px;color:var(--muted);margin:10px 0 4px}
 /* ====== NASTAVENÍ – sem vlož URL webové aplikace z Apps Scriptu (končí /exec) ====== */
 const API_URL = 'https://script.google.com/macros/s/AKfycbyI1gtXZ8S4DAHD-elswVogBaBKX2_FgTXbXwTXkf0MTq3zbJWtsTxDjKtoL4RiTwhGzg/exec';
 
-const APP_VERZE = '2026-10-19 c';
+const APP_VERZE = '2026-10-19 d';
 const PROFESE = ['Zemní práce','Hrubá stavba','Izolace / hydroizolace','Zdivo / příčky','SDK','Omítky','Potěry / podlahy',
  'Obklady / dlažby','Malby','Okna / dveře','Klempířské','Střecha','ZTI','ÚT','VZT','Elektro','Slaboproud','Výtahy',
  'Zámečnické','Truhlářské','Fasáda / ETICS','Venkovní úpravy','Úklid','Jiné'];
@@ -299,6 +300,11 @@ async function checkUpdate(){
   } catch(_){}
 }
 
+/* telefon v kontaktu firmy → ťukací odkaz pro volání */
+const PHONE_RE = /(\+?\d[\d  ]{7,}\d)/g;
+const phoneOf = t => { const m = String(t||'').match(PHONE_RE); return m ? m[0].replace(/[^\d+]/g,'') : ''; };
+const phoneLinks = t => esc(t).replace(PHONE_RE, m => `<a class="tel" href="tel:${m.replace(/[^\d+]/g,'')}">📞 ${m}</a>`);
+
 function renderHeader(){
   const who = $('#who');
   if (S.role === 'admin') { who.textContent = ls('vn_jmeno') || 'tým'; who.onclick = askName; }
@@ -389,12 +395,14 @@ async function openDetail(id){
   <div class="kv">
     <div>Místo</div><div>${esc(misto)}</div>
     <div>Profese</div><div>${esc(v.profese||'—')}</div>
-    <div>Firma</div><div>${esc(firmName(v.firma_id))}</div>
+    <div>Firma</div><div>${esc(firmName(v.firma_id))}${S.role==='admin' && (S.firmy.find(f=>f.id===v.firma_id)||{}).kontakt ? '<br>'+phoneLinks(S.firmy.find(f=>f.id===v.firma_id).kontakt) : ''}</div>
     <div>Termín</div><div class="${isLate(v)?'late':''}">${fd(v.termin)}${isLate(v)?' – po termínu':''}</div>
     <div>Zapsal</div><div>${esc(v.zadal)}, ${fd(v.vytvoreno)}</div>
     ${v.vyreseno?`<div>Vyřešeno</div><div>${fd(v.vyreseno)}</div>`:''}
     ${v.uzavreno?`<div>Uzavřeno</div><div>${fd(v.uzavreno)}</div>`:''}
   </div>`;
+  { const fk = S.role==='admin' ? (S.firmy.find(f=>f.id===v.firma_id)||{}) : {}; const tel = phoneOf(fk.kontakt);
+    if (tel) h += `<a class="btn ${v.priorita==='A' && isOpen(v) ? 'r' : 'sec'} full" style="display:block;text-align:center;text-decoration:none;margin:4px 0 10px" href="tel:${tel}">📞 Zavolat firmě ${esc(fk.nazev)}</a>`; }
   if (v.komentar_tym) h += `<div class="note"><b>Tým investora:</b> ${esc(v.komentar_tym)}</div>`;
   if (v.komentar_firmy) h += `<div class="note" style="border-color:var(--orange)"><b>Firma:</b> ${esc(v.komentar_firmy)}</div>`;
   if (v.plan && v.px) h += `<label>Místo ve výkresu (${esc(v.objekt)} ${esc(v.podlazi)}) – ťukni pro zvětšení</label>${planHtml(v.objekt, v.podlazi, v.px, v.py, false, 'dpb')}`;
@@ -580,7 +588,7 @@ function renderFirms(){
     const late = S.vady.filter(v => v.firma_id === f.id && isLate(v)).length;
     return `<div class="firm" style="${f.aktivni?'':'opacity:.5'}">
       <div class="n">${esc(f.nazev)} ${f.aktivni?'':'(neaktivní)'}</div>${f.profese?`<div class="m">${esc(f.profese)}</div>`:''}
-      <div class="m">${esc(f.email||'⚠ bez e-mailu – nebude dostávat notifikace')}${f.kontakt?' · '+esc(f.kontakt):''}</div>
+      <div class="m">${esc(f.email||'⚠ bez e-mailu – nebude dostávat notifikace')}${f.kontakt?' · '+phoneLinks(f.kontakt):''}</div>
       <div class="m" style="margin-top:4px">otevřené: ${open}${late?` · <span class="late">po termínu: ${late}</span>`:''}</div>
       <div class="rowb">
         <button class="btn sec" data-copy="${f.id}">Kopírovat odkaz</button>
