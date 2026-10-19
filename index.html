@@ -14,6 +14,16 @@ header{background:var(--blue);padding:10px 16px;position:sticky;top:0;z-index:10
 .logo{background:#fff;border-radius:8px;padding:4px 8px;display:flex;align-items:center;flex:none}
 .logo img{height:28px;width:auto;display:block}
 h1{font-size:17px;margin:0;flex:1}
+.pv{position:fixed;inset:0;z-index:50;background:#000;touch-action:pinch-zoom}
+.pvbox{position:absolute;inset:0;overflow:auto;display:flex;align-items:center;justify-content:center;-webkit-overflow-scrolling:touch}
+.pvbox img{max-width:100%;max-height:100%;object-fit:contain;cursor:zoom-in}
+.pvbox.z{display:block}.pvbox.z img{max-width:none;max-height:none;width:300%;cursor:zoom-out}
+.pvx,.pvn{position:absolute;border:0;background:#0009;color:#fff;border-radius:50%;width:44px;height:44px;font-size:28px;line-height:1;cursor:pointer}
+.pvx{top:calc(10px + env(safe-area-inset-top,0px));right:calc(10px + env(safe-area-inset-right,0px))}
+.pvn{top:50%;margin-top:-22px}.pvp{left:calc(8px + env(safe-area-inset-left,0px))}.pvnx{right:calc(8px + env(safe-area-inset-right,0px))}
+.pvc,.pvh{position:absolute;left:50%;transform:translateX(-50%);color:#fff;background:#0009;padding:4px 10px;border-radius:12px;font-size:13px}
+.pvc{top:calc(18px + env(safe-area-inset-top,0px))}.pvh{bottom:calc(14px + env(safe-area-inset-bottom,0px))}
+.photo{cursor:zoom-in}
 .ph{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px}.pt{position:relative}.pt img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;display:block}
 .pt button{position:absolute;top:2px;right:2px;width:26px;height:26px;border-radius:50%;border:0;background:#000a;color:#fff;font-size:16px;line-height:1;cursor:pointer}
 .phb{display:flex;gap:8px;margin-top:10px}
@@ -168,7 +178,32 @@ function photoPicker(el, title){
   draw(); return P;
 }
 async function resizeAll(files){ const out = []; for (const f of files) out.push(await resizePhoto(f)); return out; }
-function photoGallery(s){ return fotos(s).map(id => `<img class="photo" src="${thumb(id)}" alt="">`).join(''); }
+function photoGallery(s){ const l = fotos(s); return l.map((id,i) => `<img class="photo" src="${thumb(id)}" alt="Fotka ${i+1} – ťukni pro zvětšení" data-ph="${esc(l.join('|'))}" data-i="${i}">`).join(''); }
+
+/* prohlížeč fotek přes celou obrazovku: ťuk = zvětšit 3×, šipky = další fotka */
+const big = id => String(id).startsWith('data:') ? id : `https://drive.google.com/thumbnail?id=${encodeURIComponent(id)}&sz=w2000`;
+function openViewer(list, idx){
+  let i = idx, zoom = false;
+  let pv = document.getElementById('pv');
+  if (!pv) { pv = document.createElement('div'); pv.id = 'pv'; pv.className = 'pv'; document.body.appendChild(pv); }
+  const draw = (cx, cy) => {
+    pv.innerHTML = `<div class="pvbox${zoom ? ' z' : ''}" id="pvb"><img src="${big(list[i])}" alt="Fotka ${i+1}" draggable="false"></div>
+      <button class="pvx" type="button" aria-label="Zavřít">×</button>
+      ${list.length > 1 ? `<button class="pvn pvp" type="button" aria-label="Předchozí">‹</button><button class="pvn pvnx" type="button" aria-label="Další">›</button><div class="pvc">${i+1} / ${list.length}</div>` : ''}
+      <div class="pvh">${zoom ? 'Ťukni pro zmenšení' : 'Ťukni pro zvětšení'}</div>`;
+    const box = pv.querySelector('#pvb'), img = box.querySelector('img');
+    if (zoom && cx !== undefined) img.onload = () => { box.scrollLeft = cx * box.scrollWidth - box.clientWidth/2; box.scrollTop = cy * box.scrollHeight - box.clientHeight/2; };
+    img.onclick = ev => { const r = img.getBoundingClientRect(); const x = (ev.clientX - r.left)/r.width, y = (ev.clientY - r.top)/r.height; zoom = !zoom; draw(x, y);
+      if (zoom) { const b = pv.querySelector('#pvb'); requestAnimationFrame(() => { b.scrollLeft = x * b.scrollWidth - b.clientWidth/2; b.scrollTop = y * b.scrollHeight - b.clientHeight/2; }); } };
+    pv.querySelector('.pvx').onclick = () => { pv.remove(); };
+    if (pv.querySelector('.pvp')) { pv.querySelector('.pvp').onclick = () => { i = (i - 1 + list.length) % list.length; zoom = false; draw(); };
+      pv.querySelector('.pvnx').onclick = () => { i = (i + 1) % list.length; zoom = false; draw(); }; }
+  };
+  draw();
+}
+function bindPhotos(root){
+  root.querySelectorAll('[data-ph]').forEach(el => el.onclick = () => openViewer(el.dataset.ph.split('|'), +el.dataset.i));
+}
 
 function resizePhoto(file, max=1600){
   return new Promise((res, rej) => {
@@ -316,6 +351,7 @@ async function openDetail(id){
   h += `<div id="act"></div><div class="hist" id="hist">Načítám historii…</div>`;
   openModal(h);
   $('#cx').onclick = closeModal;
+  bindPhotos($('#modal'));
   if ($('#dpb')) $('#dpb').onclick = () => { const b = $('#dpb'); b.classList.toggle('zoom');
     if (b.classList.contains('zoom')) { b.scrollLeft = v.px*b.scrollWidth - b.clientWidth/2; b.scrollTop = v.py*b.scrollHeight - b.clientHeight/2; } };
   renderActions(v);
