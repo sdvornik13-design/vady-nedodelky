@@ -28,6 +28,7 @@ h1{font-size:17px;margin:0;flex:1}
 .pt button{position:absolute;top:2px;right:2px;width:26px;height:26px;border-radius:50%;border:0;background:#000a;color:#fff;font-size:16px;line-height:1;cursor:pointer}
 .phb{display:flex;gap:8px;margin-top:10px}
 .who:empty{display:none}
+.updbar{display:block;width:100%;border:0;background:#30a46c;color:#fff;font:700 14px system-ui,sans-serif;padding:12px 16px;padding-top:calc(12px + env(safe-area-inset-top,0px));cursor:pointer;text-align:center}
 .rfb{background:#ffffff26;border:0;color:#fff;width:34px;height:34px;border-radius:50%;font-size:20px;line-height:1;cursor:pointer;flex:none}
 .rfb.spin{animation:rot 1s linear infinite}@keyframes rot{to{transform:rotate(360deg)}}
 @media(prefers-reduced-motion:reduce){.rfb.spin{animation:none;opacity:.5}}
@@ -120,6 +121,7 @@ label{display:block;font-size:12px;color:var(--muted);margin:10px 0 4px}
 /* ====== NASTAVENÍ – sem vlož URL webové aplikace z Apps Scriptu (končí /exec) ====== */
 const API_URL = 'https://script.google.com/macros/s/AKfycbyI1gtXZ8S4DAHD-elswVogBaBKX2_FgTXbXwTXkf0MTq3zbJWtsTxDjKtoL4RiTwhGzg/exec';
 
+const APP_VERZE = '2026-10-19 c';
 const PROFESE = ['Zemní práce','Hrubá stavba','Izolace / hydroizolace','Zdivo / příčky','SDK','Omítky','Potěry / podlahy',
  'Obklady / dlažby','Malby','Okna / dveře','Klempířské','Střecha','ZTI','ÚT','VZT','Elektro','Slaboproud','Výtahy',
  'Zámečnické','Truhlářské','Fasáda / ETICS','Venkovní úpravy','Úklid','Jiné'];
@@ -239,6 +241,7 @@ async function start(){
   }
   if (S.role === 'admin' && !ls('vn_jmeno')) askName();
   lastSync = Date.now();
+  setTimeout(checkUpdate, 3000);
   $('#rfb').onclick = () => refreshData(true);
   renderHeader(); render();
   const h = decodeURIComponent(location.hash.slice(1));
@@ -268,6 +271,7 @@ async function refreshData(manual){
   try {
     const j = await api('init');
     S.vady = j.vady; S.firmy = j.firmy; S.tym = j.tym || S.tym; lastSync = Date.now();
+    checkUpdate();
     if (manual && S.tab === 'new') { toast('Data obnovena'); }
     else if (!$('#ov').classList.contains('on') && S.tab !== 'new') { const y = window.scrollY; render(); window.scrollTo(0, y); if (manual) toast('Data obnovena'); }
   } catch(e){ if (manual) toast(e.message); }
@@ -275,6 +279,25 @@ async function refreshData(manual){
 }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && Date.now() - lastSync > 15000) refreshData(false); });
 setInterval(() => { if (document.visibilityState === 'visible' && Date.now() - lastSync > 55000) refreshData(false); }, 60000);
+
+/* hlídání nové verze appky na GitHubu: stáhne aktuální index.html (obejde mezipaměť) a porovná APP_VERZE */
+let updShown = false;
+async function checkUpdate(){
+  if (updShown || location.protocol === 'file:') return;
+  try {
+    const r = await fetch(location.href.split('#')[0], {cache:'reload'});
+    const t = await r.text();
+    const m = t.match(/const APP_VERZE = '([^']+)'/);
+    if (m && m[1] !== APP_VERZE) {
+      updShown = true;
+      const d = document.createElement('button');
+      d.type = 'button'; d.className = 'updbar';
+      d.textContent = 'Je k dispozici nová verze appky – ťukni pro načtení';
+      d.onclick = () => location.reload();
+      document.body.prepend(d);
+    }
+  } catch(_){}
+}
 
 function renderHeader(){
   const who = $('#who');
@@ -316,6 +339,7 @@ function renderList(){
   h += `</div>`;
   if (!list.length) h += `<div class="empty">Nic tu není.</div>`;
   h += list.map(card).join('');
+  h += `<p class="small" style="text-align:center;margin-top:24px;opacity:.6">verze ${APP_VERZE}</p>`;
   if (S.role === 'admin') h += `<p class="small" style="text-align:center;margin-top:16px"><a href="#" id="csv" style="color:var(--muted)">Export zobrazeného seznamu do CSV</a></p>`;
   $('#main').innerHTML = h;
 
