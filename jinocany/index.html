@@ -124,7 +124,7 @@ label{display:block;font-size:12px;color:var(--muted);margin:10px 0 4px}
 /* ====== NASTAVENÍ – sem vlož URL webové aplikace z Apps Scriptu (končí /exec) ====== */
 const API_URL = 'https://script.google.com/macros/s/AKfycbxoZbx8Cy16dt9t0ClabdffgP5lPPt26zamevKgnlwLnKKOiHCIuz1XWuy-H01kXGT6/exec';
 
-const APP_VERZE = '2026-10-19 g';
+const APP_VERZE = '2026-11-13 a';
 const PROFESE = ['Zemní práce','Hrubá stavba','Izolace / hydroizolace','Zdivo / příčky','SDK','Omítky','Potěry / podlahy',
  'Obklady / dlažby','Malby','Okna / dveře','Klempířské','Střecha','ZTI','ÚT','VZT','Elektro','Slaboproud','Výtahy',
  'Zámečnické','Truhlářské','Fasáda / ETICS','Venkovní úpravy','Úklid','Jiné'];
@@ -132,6 +132,8 @@ const DNY = {A:1, B:14, C:30};
 /* půdorysy: [objekt, podlaží, soubor, poměr výška/šířka] – soubory ve složce plany/ vedle index.html */
 const PLANY = [["D levý", "1.NP", "plany/DL_1NP.webp", 0.9124], ["D levý", "2.NP", "plany/DL_2NP.webp", 0.9002], ["D pravý", "1.NP", "plany/DP_1NP.webp", 0.9811], ["D pravý", "2.NP", "plany/DP_2NP.webp", 0.9246], ["G", "1.NP", "plany/G_1NP.webp", 0.7627], ["G", "2.NP", "plany/G_2NP.webp", 0.7448]];
 const OBJEKTY = ["D levý", "D pravý", "G", "Venku", "Jiné"];
+/* čísla domů/sekcí pro objekt – tlačítka ve formuláři (prázdné = nepoužívá se) */
+const DOMY = {"D levý": ["D5-01", "D6-02", "D6-04", "D6-06", "D6-08", "D6-10", "D6-12"], "D pravý": ["D5-02", "D6-01", "D6-03", "D6-05", "D6-07", "D6-09", "D6-11"], "G": ["A", "B"]};
 const planOf = (o,p) => PLANY.find(x => x[0]===o && x[1]===p);
 const planId = (o,p) => o && p ? o+'|'+p : '';
 function planHtml(o, p, px, py, zoom, id){
@@ -496,10 +498,11 @@ function renderForm(){
   <div class="small">Stavba: Jinočany fáze Beta 3</div>
   ${e ? '' : `<div id="fph"></div>`}
   <label>Objekt</label><div class="seg" id="so"></div>
+  <div id="sdw" style="display:none"><label>Dům</label><div class="seg" id="sd"></div></div>
   <div id="spw"><label>Podlaží</label><div class="seg" id="sp"></div></div>
   <div id="plw"></div>
   <div id="jineHint" class="small" style="margin-top:6px;display:none">„Jiné“ = úkol mimo stavbu (faktura, kávovar, objednávka…). Bez výkresu, termín a upomínky fungují stejně.</div>
-  <label id="fmL">Upřesnění místa (nepovinné)</label><input id="fm" value="${esc(d.misto)}" placeholder="č. domu, místnost (např. RD 12, 1.04 kuchyň)">
+  <label id="fmL">Upřesnění místa (nepovinné)</label><input id="fm" value="${esc(d.misto)}" placeholder="místnost (např. 1.04 kuchyň, terasa)">
   <label>Komu – firma / osoba</label><select id="ff2"><option value="">Bez firmy – pošle se stavbyvedoucímu</option>${[...act].sort((a,b)=>(a.profese||'').localeCompare(b.profese||'','cs')||a.nazev.localeCompare(b.nazev,'cs')).map(f=>`<option value="${f.id}" ${d.firma_id===f.id?'selected':''}>${f.profese?esc(f.profese)+' – ':''}${esc(f.nazev)}${f.email?'':' (bez e-mailu!)'}</option>`).join('')}</select>
   <label>Popis vady *</label><textarea id="fd2" placeholder="Co je špatně a co má firma udělat">${esc(d.popis)}</textarea>
   <label>Priorita</label>
@@ -511,14 +514,20 @@ function renderForm(){
   <button class="btn full" id="fs">${e ? 'Uložit změny' : 'Uložit a poslat firmě'}</button>
   ${e ? '<button class="btn sec full" id="fc">Zrušit</button>' : ''}`;
 
+  { const all = DOMY[d.objekt] || []; const m0 = (d.misto||'').split(',')[0].trim();
+    if (all.includes(m0)) { L.d = m0; d.misto = (d.misto||'').slice((d.misto||'').indexOf(m0)+m0.length).replace(/^\s*,\s*/,''); $('#fm').value = d.misto; } else L.d = ''; }
   const drawLoc = () => {
     $('#so').innerHTML = OBJEKTY.map(o => `<button type="button" data-o="${o}" class="${L.o===o?'on':''}">${o}</button>`).join('');
+    const dm = DOMY[L.o] || []; if (!dm.includes(L.d)) L.d = '';
+    $('#sdw').style.display = dm.length ? 'block' : 'none';
+    $('#sd').innerHTML = dm.map(h => `<button type="button" data-d="${h}" class="${L.d===h?'on':''}">${h}</button>`).join('');
+    $('#sd').querySelectorAll('button').forEach(b => b.onclick = () => { L.d = L.d===b.dataset.d ? '' : b.dataset.d; drawLoc(); });
     const fl = PLANY.filter(x => x[0]===L.o).map(x => x[1]);
     $('#spw').style.display = fl.length ? 'block' : 'none';
     const jine = L.o === 'Jiné';
     $('#jineHint').style.display = jine ? 'block' : 'none';
     $('#fmL').textContent = jine ? 'Kde / k čemu (nepovinné)' : 'Upřesnění místa (nepovinné)';
-    $('#fm').placeholder = jine ? 'kancelář, buňka, faktura č. …' : 'č. domu, místnost (např. RD 12, 1.04 kuchyň)';
+    $('#fm').placeholder = jine ? 'kancelář, buňka, faktura č. …' : 'místnost (např. 1.04 kuchyň, terasa)';
     if ($('#fd2')) $('#fd2').placeholder = jine ? 'Co je potřeba udělat' : 'Co je špatně a co má firma udělat';
     $('#sp').innerHTML = fl.map(p => `<button type="button" data-p="${p}" class="${L.p===p?'on':''}">${p.replace('Střecha','Střecha')}</button>`).join('');
     const pl = planOf(L.o, L.p);
@@ -547,7 +556,7 @@ function renderForm(){
 
   $('#fs').onclick = async () => {
     const data = {
-      objekt:L.o, podlazi:L.p, plan:planOf(L.o,L.p)?planId(L.o,L.p):'', px:L.px||0, py:L.py||0, misto:$('#fm').value.trim(), firma_id:$('#ff2').value, popis:$('#fd2').value.trim(), priorita:document.querySelector('input[name=pr]:checked').value,
+      objekt:L.o, podlazi:L.p, plan:planOf(L.o,L.p)?planId(L.o,L.p):'', px:L.px||0, py:L.py||0, misto:[L.d, $('#fm').value.trim()].filter(Boolean).join(', '), firma_id:$('#ff2').value, popis:$('#fd2').value.trim(), priorita:document.querySelector('input[name=pr]:checked').value,
       termin: fromDateInput($('#ft').value)
     };
     if (!data.popis || !data.termin) return toast('Vyplňte popis a termín');
